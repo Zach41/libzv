@@ -1,0 +1,5 @@
+#define ZV_VERSION_MAJOR 0
+#define ZV_VERSION_MINOR 1
+
+#define EPOLL_BACKEND
+/* #undef KQUEUE_BACKEND */
