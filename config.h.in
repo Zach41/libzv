@@ -3,3 +3,15 @@
 
 #cmakedefine EPOLL_BACKEND
 #cmakedefine KQUEUE_BACKEND
+#cmakedefine CLOCK_TIME_BACKEND
+
+#define ZV_MAX_PRI @ZV_MAX_PRI@
+#define ZV_MIN_PRI @ZV_MIN_PRI@
+#define NUM_PRI (ZV_MAX_PRI - ZV_MIN_PRI + 1)
+
+#ifdef EPOLL_BACKEND
+#define EPOLL_EVENTMAX @EPOLL_EVENTMAX@
+#endif // EPOLL_BACKEND
+
+#define ZV_OPENFD_MAX @ZV_OPENFD_MAX@
+

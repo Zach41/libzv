@@ -4,14 +4,32 @@ project(libzv)
 set (ZV_VERSION_MAJOR 0)
 set (ZV_VERSION_MINOR 1)
 
+set (ZV_MAX_PRI 127)
+set (ZV_MIN_PRI 0)
+
+if(CMAKE_HOST_UNIX)
+  execute_process(COMMAND getconf OPEN_MAX
+    OUTPUT_VARIABLE ZV_OPENFD_MAX)
+else(CMAKE_HOST_UNIX)
+  set (ZV_OPENFD_MAX 0)
+endif(CMAKE_HOST_UNIX)
+
 include (CheckFunctionExists)
 
 check_function_exists (epoll_create EPOLL_BACKEND)
 check_function_exists (kqueue KQUEUE_BACKEND)
+check_function_exists (clock_gettime CLOCK_TIME_BACKEND)
+
+if(EPOLL_BACKEND)
+set (EPOLL_EVENTMAX 64)
+endif(EPOLL_BACKEND)
 
 configure_file (
   "${PROJECT_SOURCE_DIR}/config.h.in"
   "${PROJECT_BINARY_DIR}/config.h"
   )
+
+add_executable(zv_test.out zv_test.c zv.c)
+# target_link_libraries( )
 
 # add_library(libzv)
