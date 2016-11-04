@@ -2,6 +2,7 @@
 #define _ZV_H_
 
 #include "config.h"
+#include "timer_heap.h"
 
 typedef double zv_tstamp;
 
@@ -88,8 +89,10 @@ typedef struct zv_loop {
     int fdchanges[ZV_OPENFD_MAX];
     int fdchange_cnt;
     
-    struct zv_timer *timers;
-
+    struct zv_timer **timers;
+    int timer_max;
+    int timer_cnt;
+    
     struct zv_idle **idles[NUM_PRI];
     int idle_cnt[NUM_PRI];
 

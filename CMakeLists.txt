@@ -29,7 +29,7 @@ configure_file (
   "${PROJECT_BINARY_DIR}/config.h"
   )
 
-add_executable(zv_test.out zv_test.c zv.c)
+add_executable(zv_test.out zv_test.c zv.c timer_heap.c)
 # target_link_libraries( )
 
 # add_library(libzv)

@@ -12,14 +12,16 @@
 #include <errno.h>
 #include <string.h>
 
-#define _print_info(ident, fp, fmt)           \
-	fprintf((fp), "[%s]: ", (ident));     \
-	va_list args;                         \
-	va_start(args, fmt);		      \
-	vfprintf((fp), fmt, args);            \
-	va_end(args);                         \
-	putc('\n', (fp));		      \
-	fflush((fp));
+#define __FILENAME__ (strrchr(__FILE__, '/') ? (strrchr(__FILE__, '/') + 1) : __FILE__)
+
+#define _print_info(ident, fp, fmt)					\
+    fprintf((fp), "[%s:%s:%d]: ", (ident), (__FILENAME__), (__LINE__));	\
+    va_list args;							\
+    va_start(args, fmt);						\
+    vfprintf((fp), fmt, args);						\
+    va_end(args);							\
+    putc('\n', (fp));							\
+    fflush((fp));
 
 
 // ===============================
@@ -43,7 +45,7 @@ zv_tstamp zv_time(void) {
 
 void zv_err(const char *fmt, ...) {
     va_list args;
-    fprintf(stderr, "[ERROR]: ");
+    fprintf(stderr, "[ERROR:%s:%d]: ", __FILENAME__, __LINE__);
     va_start(args, fmt);
     vfprintf(stderr, fmt, args);
     if (errno) {

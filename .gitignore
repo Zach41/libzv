@@ -1,6 +1,11 @@
 # emacs generated files
 *~
 
+# gtags file
+GPATH
+GRTAGS
+GTAGS
+
 # Created by https://www.gitignore.io/api/cmake
 
 ### CMake ###
