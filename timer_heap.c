@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #include "timer_heap.h"
 #include "zv.h"
@@ -34,6 +35,9 @@ void theap_destroy(struct zv_loop *lp) {
     assert(lp);
 
     free(lp -> timers);
+    lp -> timers = NULL;	/* protect again dangling pointers */
+    if (errno)
+	zv_err("free error");
     lp -> timer_cnt = 0;
     lp -> timer_max = 0;
 }
