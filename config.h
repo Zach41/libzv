@@ -8,6 +8,9 @@
 #define ZV_MAX_PRI 127
 #define ZV_MIN_PRI 0
 #define NUM_PRI (ZV_MAX_PRI - ZV_MIN_PRI + 1)
+#define DEFEAUL_PRI ZV_MIN_PRI
+
+#define SIGNUM 32
 
 #ifdef EPOLL_BACKEND
 #define EPOLL_EVENTMAX 
