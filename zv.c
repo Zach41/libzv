@@ -398,8 +398,8 @@ zv_loop *zv_default_loop() {
 	    zv_err("calloc error");
 	zv_loop_init(lp);
 	lp -> is_default = 1;
-
-	// only default loop deals with signal
+	
+	// only default loop deals with signal	
 	if (pipe(pipefd) < 0)
 	    zv_err("pipe error");
 	zv_io_init(sig_io, sig_cb, pipefd[1], ZV_READ);
@@ -420,6 +420,23 @@ void unref_loop(zv_loop *lp) {
 
 void zv_loop_run(zv_loop *lp) {
     assert(lp);
+
+    if (lp -> is_default) {
+	sigset_t mask;
+	pthread_t tid;
+	pthread_attr_t attr;
+	int err;
+	sigfillset(&mask);
+	if (sigprocmask(SIG_SETMASK, &mask, NULL) < 0)
+	    zv_err("sigprocmask error");
+
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+	err = pthread_create(&tid, &attr, sig_handler, NULL);
+	if (err)
+	    zv_err("pthread_create error: %s", strerror(err));
+	pthread_attr_destroy(&attr);
+    }
     
     call_pending(lp);		/* incase there is any pending events */
 
@@ -602,7 +619,7 @@ void zv_timer_stop(zv_loop *lp, zv_timer *w) {
 void zv_signal_init(zv_signal *w, w_cb cb, int signo) {
     assert(w);
     zv_init((zv_watcher *)w, cb);
-    w -> priority = ZV_MAX_PRI;	/* we give signal the highest priority */
+    zv_set_priority((zv_watcher *)w, ZV_MAX_PRI, NULL);    /* we give signal the highest priority */
     w -> signo = signo;
 }
 
@@ -672,7 +689,7 @@ void zv_idle_init(zv_idle *w, w_cb cb) {
     assert(w);
 
     zv_init((zv_watcher *)w, cb);
-    w -> priority = ZV_MIN_PRI;	/* idle's default priority is min_pri */
+    zv_set_priority((zv_watcher *)w, ZV_MIN_PRI, NULL);	/* idle's default priority is min_pri */
 }
 
 void zv_idle_start(zv_loop *lp, zv_idle *w) {

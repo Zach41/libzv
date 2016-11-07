@@ -10,7 +10,7 @@
 #define ZV_MIN_PRI 0
 #define NUM_PRI (ZV_MAX_PRI - ZV_MIN_PRI + 1)
 
-#define DEFEAUL_PRI ()(ZV_MAX_PRI - ZV_MIN_PRI + 1) / 2)
+#define DEFEAUL_PRI ((ZV_MAX_PRI - ZV_MIN_PRI + 1) / 2)
 
 #define SIGNUM 32
 
