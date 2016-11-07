@@ -633,6 +633,7 @@ void zv_signal_start(zv_loop *lp, zv_signal *w) {
 	sigs = signals[signo];
     }
     sigs[idx] = w;
+    w -> idx = idx;
 }
 
 void zv_signal_stop(zv_loop *lp, zv_signal *w) {
@@ -648,11 +649,7 @@ void zv_signal_stop(zv_loop *lp, zv_signal *w) {
     sigrefs[w -> signo] -= 1;
 
     zv_signal **sigs = signals[w -> signo];
-    for (int idx=0; idx<signals_max[w -> signo]; idx++) {
-	if (sigs[idx] == w) {
-	    sigs[idx] = NULL;
-	}
-    }
+    sigs[w -> idx] = NULL;
 }
 
 void zv_feed_signal(zv_loop *lp, int signo) {
@@ -670,3 +667,132 @@ void zv_feed_signal(zv_loop *lp, int signo) {
     }
 }
 
+/* zv_idle */
+void zv_idle_init(zv_idle *w, w_cb cb) {
+    assert(w);
+
+    zv_init((zv_watcher *)w, cb);
+    w -> priority = ZV_MIN_PRI;	/* idle's default priority is min_pri */
+}
+
+void zv_idle_start(zv_loop *lp, zv_idle *w) {
+    assert(lp && w);
+
+    if (w -> active)
+	return;
+    zv_start(lp, (zv_watcher *)w);
+
+    int pri = w -> priority, idx;
+    zv_idle **idles = (lp -> idles)[pri];
+    zv_idle *idle;
+    for (idx = 0; idx < (lp -> idle_max)[pri]; idx++) {
+	idle = idles[idx];
+	if (idle == NULL || idle -> active == 0) {
+	    break;
+	}
+    }
+    if (idx == (lp -> idle_max)[pri]) {
+	(lp -> idles)[pri] = array_alloc((lp -> idles)[pri],
+					 (lp -> idle_max)[pri] + ARRAY_BLK,
+					 sizeof(void *));
+	(lp -> idle_max)[pri] += ARRAY_BLK;
+	idles = (lp -> idles)[pri];
+    }
+    idles[idx] = w;
+    w -> idx = idx;
+    (lp -> idle_cnt)[pri] += 1;
+}
+
+void zv_idle_stop(zv_loop *lp, zv_idle *w) {
+    assert(lp && w);
+
+    if (!w -> active)
+	return;
+    zv_stop(lp, (zv_watcher *)w);
+
+    (lp -> idles)[w -> priority][w -> idx] = NULL;
+}
+
+/* zv_prepare */
+void zv_prepare_init(zv_prepare *w, w_cb cb) {
+    assert(w);
+
+    zv_init((zv_watcher *)w, cb);    
+}
+
+void zv_prepare_start(zv_loop *lp, zv_prepare *w) {
+    assert(lp && w);
+    if (w -> active)
+	return;
+    zv_start(lp, (zv_watcher *)w);
+
+    int idx;
+    zv_prepare **prepares = (lp -> prepares), *prepare;
+    for (idx = 0; idx < (lp -> prepare_max); idx++) {
+	prepare = prepares[idx];
+	if (prepare == NULL || prepare -> active == 0) {
+	    break;
+	}
+    }
+    if (idx == (lp -> prepare_max)) {
+	(lp -> prepares) = array_alloc((lp -> prepares),
+				       (lp -> prepare_max) + ARRAY_BLK,
+				       sizeof(void *));
+	lp -> prepare_max += ARRAY_BLK;
+	prepares = (lp -> prepares);
+    }
+    prepares[idx] = w;
+    w -> idx = idx;
+    lp -> prepare_cnt += 1;
+}
+
+void zv_prepare_stop(zv_loop *lp, zv_prepare *w) {
+    assert(lp && w);
+    if (!w -> active)
+	return;
+
+    zv_stop(lp, (zv_watcher *)w);
+    (lp -> prepares)[w -> idx] = NULL;
+}
+
+/* zv_check */
+void zv_check_init(zv_check *w, w_cb cb) {
+    assert(w);
+
+    zv_init((zv_watcher *)w, cb);
+}
+
+void zv_check_start(zv_loop *lp, zv_check *w) {
+    assert(lp && w);
+
+    if (w -> active)
+	return;
+    zv_start(lp, (zv_watcher *)w);
+
+    int idx;
+    zv_check **checks = (lp -> checks), *check;
+    for (idx = 0; idx < (lp -> check_max); idx++) {
+	check = checks[idx];
+	if (check == NULL || check -> active == 0)
+	    break;
+    }
+    if (idx == (lp -> check_max)) {
+	(lp -> checks) = array_alloc((lp -> checks),
+				     (lp -> check_max) + ARRAY_BLK,
+				     sizeof(void *));
+	(lp -> check_max) += ARRAY_BLK;
+	checks = (lp -> checks);
+    }
+    checks[idx] = w;
+    w -> idx = idx;
+    (lp -> check_cnt) += 1;
+}
+
+void zv_check_stop(zv_loop *lp, zv_check *w) {
+    assert(lp && w);
+    if (!w -> active)
+	return;
+
+    zv_stop(lp, (zv_watcher *)w);
+    (lp -> checks)[w -> idx] = NULL;
+}

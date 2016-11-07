@@ -1,21 +1,23 @@
 #define ZV_VERSION_MAJOR 0
 #define ZV_VERSION_MINOR 1
 
-/* #undef EPOLL_BACKEND */
-#define KQUEUE_BACKEND
+#define EPOLL_BACKEND
+/* #undef KQUEUE_BACKEND */
+
 #define CLOCK_TIME_BACKEND
 
 #define ZV_MAX_PRI 127
 #define ZV_MIN_PRI 0
 #define NUM_PRI (ZV_MAX_PRI - ZV_MIN_PRI + 1)
-#define DEFEAUL_PRI ZV_MIN_PRI
+
+#define DEFEAUL_PRI ()(ZV_MAX_PRI - ZV_MIN_PRI + 1) / 2)
 
 #define SIGNUM 32
 
 #ifdef EPOLL_BACKEND
-#define EPOLL_EVENTMAX 
+#define EPOLL_EVENTMAX 64
 #endif // EPOLL_BACKEND
 
-#define ZV_OPENFD_MAX 256
+#define ZV_OPENFD_MAX 1024
 
 

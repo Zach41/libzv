@@ -48,20 +48,24 @@ typedef struct zv_timer {
 } zv_timer;
 
 typedef struct zv_prepare {
-    WATCHER(zv_prepare)    
+    WATCHER(zv_prepare)
+    int idx;
 } zv_prepare;
 
 typedef struct zv_check {
     WATCHER(zv_check)
+    int idx;
 } zv_check;
 
 typedef struct zv_signal {
     WATCHER(zv_signal)
-    int signo;    
+    int signo;
+    int idx;
 } zv_signal;
 
 typedef struct zv_idle {
     WATCHER(zv_idle)
+    int idx;
 } zv_idle;
 
 // ================================
