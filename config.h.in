@@ -3,6 +3,8 @@
 
 #cmakedefine EPOLL_BACKEND
 #cmakedefine KQUEUE_BACKEND
+#cmakedefine SELECT_BACKEND
+#cmakedefine POLL_BACKEND
 
 #cmakedefine CLOCK_TIME_BACKEND
 
@@ -15,7 +17,7 @@
 #define SIGNUM 32
 
 #ifdef EPOLL_BACKEND
-#define EPOLL_EVENTMAX @EPOLL_EVENTMAX@
+#define EPOLL_EVENTBLK @EPOLL_EVENTBLK@
 #endif // EPOLL_BACKEND
 
 #define ZV_OPENFD_MAX @ZV_OPENFD_MAX@

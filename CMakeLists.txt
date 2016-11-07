@@ -18,10 +18,13 @@ include (CheckFunctionExists)
 
 check_function_exists (epoll_create EPOLL_BACKEND)
 check_function_exists (kqueue KQUEUE_BACKEND)
+check_function_exists (select SELECT_BACKEND)
+check_function_exists (poll POLL_BACKEND)
+
 check_function_exists (clock_gettime CLOCK_TIME_BACKEND)
 
 if(EPOLL_BACKEND)
-set (EPOLL_EVENTMAX 64)
+set (EPOLL_EVENTBLK 64)
 endif(EPOLL_BACKEND)
 
 configure_file (

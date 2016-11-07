@@ -84,11 +84,12 @@ struct ANPENDING {
 
 typedef struct zv_loop {
     int is_default;		/* indicate wether this is default loop */
+    int backend;
     zv_tstamp zv_now;
     int activecnt;		/* how many watchers hold the loop right now */
     int loop_cnt;		/* how many loops have been so far */
-    void (*backend_modify) (struct zv_loop *loop, int fd, int nev, int *oev);
-    void (*backend_poll) (struct zv_loop *loop, zv_tstamp timeout);
+    void (*backend_modify) (struct zv_loop *loop, int fd, int evs);
+    void (*backend_poll) (struct zv_loop *loop, zv_tstamp timedout);
     int backend_fd;		/* for example, epoll use it */
     
 #ifdef EPOLL_BACKEND
@@ -99,6 +100,7 @@ typedef struct zv_loop {
     /* current watching fds */
     struct ANFD *anfds[ZV_OPENFD_MAX];
     int anfds_max[ZV_OPENFD_MAX];
+    int anfds_cnt[ZV_OPENFD_MAX];
     
     /* current pending events */
     struct ANPENDING *anpendings[NUM_PRI];
@@ -128,7 +130,7 @@ typedef struct zv_loop {
 // common functions
 zv_tstamp zv_time(void);
 
-void zv_err(const char *cmt, ...);
+void zv_err(int flag, const char *cmt, ...);
 
 void zv_warn(const char *cmt, ...);
 

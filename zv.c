@@ -30,6 +30,8 @@
     putc('\n', (fp));							\
     fflush((fp));
 
+void epoll_init(zv_loop *lp);
+void epoll_destroy(zv_loop *lp);
 
 // ===============================
 zv_tstamp zv_time(void) {
@@ -37,20 +39,20 @@ zv_tstamp zv_time(void) {
 #ifdef CLOCK_TIME_BACKEND
     struct timespec ts;
     if (clock_gettime(CLOCK_REALTIME, &ts) < 0) {
-	zv_err("clock_gettime error");
+	zv_err(1, "clock_gettime error");
     }
     now = ts.tv_sec * 1e-9 + ts.tv_nsec;
 #else
     struct timeval tv;
     if (gettimeofday(&tv, NULL) < 0) {
-	zv_err("gettimeofday error");
+	zv_err(1, "gettimeofday error");
     }
     now = tv.tv_sec * 1e-6 + tv.tv_usec;
 #endif
     return now;
 }
 
-void zv_err(const char *fmt, ...) {
+void zv_err(int flag, const char *fmt, ...) {
     va_list args;
     fprintf(stderr, "[ERROR:%s:%d]: ", __FILENAME__, __LINE__);
     va_start(args, fmt);
@@ -61,8 +63,11 @@ void zv_err(const char *fmt, ...) {
 	putc('\n', stderr);
     }
     va_end(args);
-    exit(-1);
+    if (flag)
+	exit(-1);
 }
+
+
 
 void zv_warn(const char *fmt, ...) {
     _print_info("WARNING", stdout, fmt)
@@ -81,7 +86,7 @@ void zv_debug(const char *fmt, ...) {
 static void* array_alloc(void *arr, int cnt, int size) {
     void *narr = realloc(arr, cnt * size);
     if (narr == NULL)
-	zv_err("realloc error");
+	zv_err(1, "realloc error");
 
     return narr;
 }
@@ -106,10 +111,10 @@ void zv_feed_event(zv_loop *lp, zv_watcher *w, int revents) {
 
     if (w -> pending) {
 	/* if watcher is already in pending list */
-	struct ANPENDING pending = (lp -> anpendings)[pri][w -> pending -1];
-	assert(pending.active);
+	struct ANPENDING *pending = (lp -> anpendings)[pri] + (w -> pending -1);
+	assert(pending -> active);
 	
-	pending.events |= revents;
+	pending -> events |= revents;
 	return;
     }
 
@@ -170,18 +175,20 @@ void fd_kill(zv_loop *lp, int fd) {
     assert(fd >= 0 && fd <= ZV_OPENFD_MAX);
 
     struct ANFD *anfdp = (lp -> anfds)[fd];
-    assert(anfdp);
+    if (anfdp == NULL)
+	return;
 
-    struct ANFD anfd;
+    struct ANFD *anfd;
     for (int i=0; i<(lp -> anfds_max)[fd]; i++) {
-	anfd = *(anfdp + i);
-	if (anfd.active) {
-	    zv_io_stop(lp, (zv_io *)anfd.watcher);
-	    anfd.active = 0;
+	anfd = (anfdp + i);
+	if (anfd -> active) {
+	    zv_io_stop(lp, (zv_io *)(anfd -> watcher));
+	    anfd -> active = 0;
 	    // events on fd are interrupted, so we sent an error
-	    zv_feed_event(lp, anfd.watcher, ZV_ERROR | ZV_READ | ZV_WRITE);
+	    zv_feed_event(lp, anfd -> watcher, ZV_ERROR | ZV_READ | ZV_WRITE);
 	}
-    }    
+    }
+    (lp -> backend_modify)(lp, fd, -1);
 }
 
 void fd_change(zv_loop *lp, int fd) {
@@ -194,24 +201,24 @@ void fd_change(zv_loop *lp, int fd) {
 void fd_reify(zv_loop *lp) {
     assert(lp);
 
-    struct ANFD anfd;
+    struct ANFD *anfd;
     for (int fd = 0; fd<ZV_OPENFD_MAX; fd++) {
 	if ((lp -> fdchanges)[fd]) {
 	    int events = ZV_NONE;
 	    for (int j=0; j<(lp -> anfds_max)[fd]; j++) {
-		anfd = ((lp -> anfds)[fd])[j];
-		if (anfd.active == 0)
+		anfd = ((lp -> anfds)[fd] + j) ;
+		if (anfd -> active == 0)
 		    continue;
 		
-		zv_io *w = (zv_io *)(anfd.watcher);
+		zv_io *w = (zv_io *)(anfd -> watcher);
 		if (w -> active == 0)
 		    continue;
-		if (w -> events != anfd.events) {
-		    anfd.events = w -> events;
+		if (w -> events != anfd -> events) {
+		    anfd -> events = w -> events;
 		}
 		events |= w -> events;
 	    }
-	    lp -> backend_modify(lp, fd, events, NULL);
+	    lp -> backend_modify(lp, fd, events);
 	    (lp -> fdchanges)[fd] = 0;
 	}
     }
@@ -224,13 +231,13 @@ int clear_pending(zv_loop *lp, zv_watcher *w) {
     assert(lp && w);
     if (w -> pending) {
 	int pri = adjust_pri(w);
-	struct ANPENDING pending = (lp -> anpendings)[pri][w -> pending - 1];
-	assert(pending.active);
+	struct ANPENDING *pending = (lp -> anpendings)[pri]+ (w -> pending - 1);
+	assert(pending -> active);
 
-	int events = pending.events;
-	pending.events = ZV_NONE;
-	pending.active = 0;
-	pending.watcher = NULL;
+	int events = pending -> events;
+	pending -> events = ZV_NONE;
+	pending -> active = 0;
+	pending -> watcher = NULL;
 	    
 	return events;
     }
@@ -246,17 +253,17 @@ void zv_invoke(zv_loop *lp, zv_watcher *w, int revents) {
 void call_pending(zv_loop *lp) {
     for (int pri = ZV_MAX_PRI; pri >= ZV_MIN_PRI; pri--) {
 	struct ANPENDING *pendings = (lp -> anpendings)[pri];
-	struct ANPENDING pending;
+	struct ANPENDING *pending;
 	for (int i=0; i<(lp -> pendingmax)[pri]; i++) {
-	    pending = *(pendings + i);
-	    if (pending.active) {
-		assert(pending.watcher);
+	    pending = (pendings + i);
+	    if (pending -> active) {
+		assert(pending -> watcher);
 
-		zv_invoke(lp, pending.watcher, pending.events);
+		zv_invoke(lp, pending -> watcher, pending -> events);
 	    }
-	    pending.active = 0;
-	    pending.events = ZV_NONE;
-	    pending.watcher = NULL;
+	    pending -> active = 0;
+	    pending -> events = ZV_NONE;
+	    pending -> watcher = NULL;
 	}
     }
 }
@@ -325,7 +332,7 @@ void * sig_handler(void *arg) {
     for (;;) {
 	err = sigwait(&mask, &signo);
 	if (err != 0) {
-	    zv_err("sigwait error");
+	    zv_err(1, "sigwait error");
 	}
 	if (sigrefs[signo])
 	    write(pipefd[1], (char *)&signo, 1);
@@ -337,7 +344,7 @@ static void sig_cb(zv_loop *lp, zv_watcher *w, int revents) {
     if (revents & ZV_READ) {
 	n = read(pipefd[0], &signo, 1);
 	if (n != 1) {
-	    zv_err("read from signal pipe error");
+	    zv_err(1, "read from signal pipe error");
 	}
 	zv_feed_signal(lp, signo);
     }
@@ -351,12 +358,31 @@ void zv_loop_init(zv_loop *lp) {
 
     lp -> zv_now = zv_time();
     lp -> loop_cnt = 0;
+    lp -> backend = 0;
 
-    // TODO: setup backends
+
+#ifdef EPOLL_BACKEND
+    /* epoll initialization */
+    if (!(lp -> backend))
+	epoll_init(lp);
+#endif // EPOLL_BACKEND
+    
+#ifdef KQUEUE_BACKEND
+    /* kqueue initialization */
+#endif // KQUEUE_BACKEND
+
+#ifdef SELECT_BACKEND
+    /* select initialization */	
+#endif // SELECT_BACKEND
+
+#ifdef POLL_BACKEND
+    /* poll initialization */
+#endif // POLL_BACKEND    
 
     for (int fd=0; fd<ZV_OPENFD_MAX; fd++) {
 	(lp -> anfds)[fd] = NULL;
 	(lp -> anfds_max)[fd] = 0;
+	(lp -> anfds_cnt)[fd] = 0;
 	(lp -> fdchanges)[fd] = 0;
     }
 
@@ -377,13 +403,9 @@ void zv_loop_init(zv_loop *lp) {
     lp -> checks = NULL;
     lp -> check_max = lp -> check_cnt = 0;
 
-    /* for (int signo = 0; signo < SIGNUM; signo++) { */
-    /* 	(lp -> signals)[signo] = NULL; */
-    /* 	(lp -> signals_cnt)[signo] = 0; */
-    /* 	(lp -> signals_max)[signo] = 0; */
-    /* } */
-
     lp -> is_default = 0;
+    lp -> activecnt = 0;
+    lp -> loop_cnt = 0;
 }
 
 pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -395,13 +417,13 @@ zv_loop *zv_default_loop() {
     if (lp == NULL) {
 	lp = (zv_loop *)calloc(1, sizeof(zv_loop));
 	if (lp == NULL)
-	    zv_err("calloc error");
+	    zv_err(1, "calloc error");
 	zv_loop_init(lp);
 	lp -> is_default = 1;
 	
 	// only default loop deals with signal	
 	if (pipe(pipefd) < 0)
-	    zv_err("pipe error");
+	    zv_err(1, "pipe error");
 	zv_io_init(sig_io, sig_cb, pipefd[1], ZV_READ);
 	zv_io_start(lp, sig_io);
     }
@@ -428,19 +450,20 @@ void zv_loop_run(zv_loop *lp) {
 	int err;
 	sigfillset(&mask);
 	if (sigprocmask(SIG_SETMASK, &mask, NULL) < 0)
-	    zv_err("sigprocmask error");
+	    zv_err(1, "sigprocmask error");
 
 	pthread_attr_init(&attr);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 	err = pthread_create(&tid, &attr, sig_handler, NULL);
 	if (err)
-	    zv_err("pthread_create error: %s", strerror(err));
+	    zv_err(1, "pthread_create error: %s", strerror(err));
 	pthread_attr_destroy(&attr);
     }
     
     call_pending(lp);		/* incase there is any pending events */
 
     do {
+	lp -> loop_cnt += 1;
 	// prepare events
 	if (lp -> prepare_cnt) {
 	    int cnt = lp -> prepare_cnt;
@@ -538,6 +561,7 @@ static void add_anfd(zv_loop *lp, int fd, zv_io *w) {
     anfds[idx].watcher = (zv_watcher *)w;
     anfds[idx].events = w -> events;
     anfds[idx].active = w -> active;
+    (lp -> anfds_cnt)[fd] += 1;
 }
 
 static void delete_anfd(zv_loop *lp, int fd, zv_io *w) {
@@ -549,8 +573,12 @@ static void delete_anfd(zv_loop *lp, int fd, zv_io *w) {
 	if (anfds[idx].watcher == (zv_watcher *)w) {
 	    anfds[idx].active = 0;
 	    anfds[idx].watcher = NULL;
+	    (lp -> anfds_cnt)[fd] -= 1;
 	    break;
 	}
+    }
+    if ((lp -> anfds_cnt)[fd] == 0) {
+	(lp -> backend_modify)(lp, fd, -1);
     }
 }
 
